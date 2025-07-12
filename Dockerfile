@@ -1,8 +1,17 @@
-# Use a Python image with uv pre-installed
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS uv
+# Use a Python image from Docker Hub mirror
+FROM python:3.12-slim AS uv
 
 # Install the project into `/app`
 WORKDIR /app
+
+# Set pip mirror and timeout
+ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ENV PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
+ENV UV_HTTP_TIMEOUT=180
+ENV UV_NETWORK_TIMEOUT=180
+
+# Install uv using pip
+RUN pip install uv
 
 # Enable bytecode compilation
 ENV UV_COMPILE_BYTECODE=1
@@ -13,14 +22,14 @@ ENV UV_LINK_MODE=copy
 # Install the project's dependencies using the lockfile and settings
 RUN --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project --no-dev --no-editable
+    uv sync --frozen --no-install-project --no-dev --no-editable 
 
 # Then, add the rest of the project source code and install it
 # Installing separately from its dependencies allows optimal layer caching
 ADD . /app
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-editable
+    uv sync --frozen --no-dev --no-editable 
 
 FROM python:3.12-slim
 
@@ -29,7 +38,6 @@ WORKDIR /app
 COPY src /app/src
 COPY --from=uv /usr/local/bin/uv /usr/local/bin/uv
 COPY --from=uv --chown=app:app /app/.venv /app/.venv
-
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
